@@ -59,3 +59,9 @@ def test_setup_routes_need_the_key():
     client, _ = make_client()
     assert client.get("/connect/strava").status_code == 403
     assert client.get("/", params={"key": "wrong"}).status_code == 403
+
+
+def test_health_avoids_cloud_run_reserved_path():
+    # Cloud Run answers paths ending in "z" (such as /healthz) itself.
+    client, _ = make_client()
+    assert client.get("/health").json() == {"ok": True}

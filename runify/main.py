@@ -51,8 +51,8 @@ def _require_key(pipeline: Pipeline, key: str) -> None:
         raise HTTPException(status_code=403, detail="Wrong or missing setup key")
 
 
-@app.get("/healthz")
-def healthz() -> dict:
+@app.get("/health")
+def health() -> dict:
     return {"ok": True}
 
 
