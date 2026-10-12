@@ -87,7 +87,7 @@ stays inside the free tier; do that yourself.
 >    `STORE_BACKEND` = `firestore` for now. We'll add the rest later.
 > 8. Click Create and wait for the first deployment to finish.
 >
-> When it's live, open `<service URL>/healthz` in a new tab and check it shows
+> When it's live, open `<service URL>/health` in a new tab and check it shows
 > `{"ok":true}`. Then tell me the service URL. Don't open anything else.
 
 Write down the service URL. From here on it's called **BASE_URL**, and the
@@ -197,7 +197,7 @@ and Spotify, the Claude key, and your two invented values).
 > `STRAVA_CLIENT_SECRET`, `SPOTIFY_CLIENT_SECRET`, `ANTHROPIC_API_KEY`,
 > `SETUP_KEY`, `STRAVA_VERIFY_TOKEN`.
 >
-> Deploy, wait for it to finish, then check `/healthz` still shows
+> Deploy, wait for it to finish, then check `/health` still shows
 > `{"ok":true}`.
 
 ---
