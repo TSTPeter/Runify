@@ -3,13 +3,13 @@ import copy
 import httpx
 import respx
 
-from runify import weather
+from runify import news, weather
 from runify.config import Settings
 from runify.namer import Naming
 from runify.pipeline import Pipeline
 from runify.store import MemoryStore
 
-from .fixtures import ACTIVITY, OPEN_METEO, RECENT, RECENTLY_PLAYED
+from .fixtures import ACTIVITY, NEWS_RSS, OPEN_METEO, RECENT, RECENTLY_PLAYED
 
 
 class FakeTokens:
@@ -61,26 +61,32 @@ class FakeSpotify:
 
 
 class FakeNamer:
-    def __init__(self):
+    def __init__(self, headline=""):
         self.calls = []
+        self.headline = headline
 
     def name_run(self, facts, avoid=None):
         self.calls.append((facts, avoid))
-        return Naming(name=f"Drizzle Queen {len(self.calls)}", line="The wind had opinions.")
+        return Naming(name=f"Drizzle Queen {len(self.calls)}", line="The wind had opinions.", headline=self.headline)
 
 
-def make(activity=ACTIVITY, spotify_connected=True):
+def make(activity=ACTIVITY, spotify_connected=True, headline=""):
     settings = Settings(store_backend="memory")
     strava = FakeStrava(copy.deepcopy(activity))
     spotify = FakeSpotify(spotify_connected)
-    namer = FakeNamer()
+    namer = FakeNamer(headline)
     pipeline = Pipeline(settings, MemoryStore(), httpx.Client(), strava, spotify, namer)
     return pipeline, strava, spotify, namer
 
 
+def mock_feeds():
+    respx.get(weather.API).mock(return_value=httpx.Response(200, json=OPEN_METEO))
+    respx.get(news.DEFAULT_FEED).mock(return_value=httpx.Response(200, text=NEWS_RSS))
+
+
 @respx.mock
 def test_first_pass_names_and_describes():
-    respx.get(weather.API).mock(return_value=httpx.Response(200, json=OPEN_METEO))
+    mock_feeds()
     pipeline, strava, spotify, namer = make()
 
     assert pipeline.handle(1001) == "named: Drizzle Queen 1"
@@ -102,7 +108,7 @@ def test_first_pass_names_and_describes():
 
 @respx.mock
 def test_second_event_does_not_rename_again():
-    respx.get(weather.API).mock(return_value=httpx.Response(200, json=OPEN_METEO))
+    mock_feeds()
     pipeline, strava, _, _ = make()
     pipeline.handle(1001)
     assert pipeline.handle(1001) == "skipped: already named"
@@ -111,7 +117,7 @@ def test_second_event_does_not_rename_again():
 
 @respx.mock
 def test_reroll_keeps_playlist_and_avoids_old_names():
-    respx.get(weather.API).mock(return_value=httpx.Response(200, json=OPEN_METEO))
+    mock_feeds()
     pipeline, strava, spotify, namer = make()
     pipeline.handle(1001)
     strava.activity["name"] = "Drizzle Queen 1 :("
@@ -134,7 +140,9 @@ def test_rides_are_ignored():
     assert pipeline.handle(1001) == "skipped: Ride"
 
 
+@respx.mock
 def test_treadmill_without_spotify():
+    mock_feeds()
     pipeline, strava, spotify, _ = make({**ACTIVITY, "start_latlng": []}, spotify_connected=False)
     pipeline.handle(1001)
     description = strava.updates[0][2]
@@ -145,7 +153,37 @@ def test_treadmill_without_spotify():
 
 @respx.mock
 def test_runner_description_is_kept_on_top():
-    respx.get(weather.API).mock(return_value=httpx.Response(200, json=OPEN_METEO))
+    mock_feeds()
     pipeline, strava, _, _ = make({**ACTIVITY, "description": "Legs like jelly."})
     pipeline.handle(1001)
     assert strava.updates[0][2].startswith("Legs like jelly.\n\n🎧 3 tracks")
+
+
+@respx.mock
+def test_headlines_reach_claude_and_chosen_one_is_linked():
+    mock_feeds()
+    pipeline, strava, _, namer = make(headline="village fete crowns giant marrow champion")
+    pipeline.handle(1001)
+    facts = namer.calls[0][0]
+    assert facts["news_headlines"][1] == "Council debates new cycle lanes"
+    description = strava.updates[0][2]
+    assert "📰 Village fete crowns giant marrow champion (https://example.test/news/marrow)" in description
+
+
+@respx.mock
+def test_made_up_headline_is_not_shown():
+    mock_feeds()
+    pipeline, strava, _, _ = make(headline="Something Claude invented")
+    pipeline.handle(1001)
+    assert "📰" not in strava.updates[0][2]
+
+
+@respx.mock
+def test_reroll_reuses_the_same_headlines():
+    mock_feeds()
+    pipeline, strava, _, namer = make(headline="Council debates new cycle lanes")
+    pipeline.handle(1001)
+    strava.activity["name"] = "Drizzle Queen 1 :("
+    pipeline.handle(1001)
+    assert namer.calls[1][0]["news_headlines"] == namer.calls[0][0]["news_headlines"]
+    assert "📰 Council debates new cycle lanes" in strava.updates[1][2]

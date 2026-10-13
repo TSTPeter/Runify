@@ -21,6 +21,7 @@ from typing import Any
 
 import httpx
 
+from . import news as news_mod
 from . import weather as weather_mod
 from .config import Settings
 from .namer import Namer
@@ -51,6 +52,7 @@ def build_description(
     line: str,
     playlist_url: str | None,
     runner_text: str = "",
+    news: dict | None = None,
 ) -> str:
     summary = []
     if tracks:
@@ -65,6 +67,8 @@ def build_description(
     parts.append(" · ".join(summary))
     if line:
         parts.append(line)
+    if news:
+        parts.append(f"📰 {news['title']}" + (f" ({news['url']})" if news.get("url") else ""))
     if tracks:
         heading = "Soundtrack"
         if playlist_url:
@@ -76,7 +80,17 @@ def build_description(
     return "\n\n".join(parts)
 
 
-def _facts(activity: dict, tracks: list[Track], weather, form: Form) -> dict[str, Any]:
+def _matching_headline(chosen: str, headlines: list[dict]) -> dict | None:
+    """The headline Claude says it used, if it really is one of ours."""
+    wanted = chosen.strip().casefold()
+    if not wanted:
+        return None
+    return next((h for h in headlines if h["title"].strip().casefold() == wanted), None)
+
+
+def _facts(
+    activity: dict, tracks: list[Track], weather, form: Form, headlines: list[dict] | None = None
+) -> dict[str, Any]:
     distance_km = (activity.get("distance") or 0) / 1000
     moving = activity.get("moving_time") or activity.get("elapsed_time") or 0
     pace = None
@@ -94,6 +108,7 @@ def _facts(activity: dict, tracks: list[Track], weather, form: Form) -> dict[str
         "songs_in_order": [t.line() for t in tracks],
         "weather": asdict(weather) if weather else None,
         "recent_form": asdict(form),
+        "news_headlines": [h["title"] for h in headlines or []],
     }
 
 
@@ -150,13 +165,15 @@ class Pipeline:
         tracks = self._tracks(start, end)
         weather = self._weather(activity, start)
         form = self._form(activity)
-        facts = _facts(activity, tracks, weather, form)
+        headlines = news_mod.fetch(self.http, self.settings.news_feed_url)
+        facts = _facts(activity, tracks, weather, form, headlines)
         naming = self.namer.name_run(facts)
 
         playlist = self._playlist(naming.name, start, tracks)
         runner_text = activity.get("description") or ""
+        news = _matching_headline(naming.headline, headlines)
         description = build_description(
-            tracks, weather, form, naming.line, playlist and playlist["url"], runner_text
+            tracks, weather, form, naming.line, playlist and playlist["url"], runner_text, news
         )
         self.strava.update_activity(activity["id"], naming.name, description)
 
@@ -171,6 +188,7 @@ class Pipeline:
                 "weather": asdict(weather) if weather else None,
                 "form": asdict(form),
                 "playlist": playlist,
+                "headlines": headlines,
             },
         )
         log.info("Named activity %s: %s", activity["id"], naming.name)
@@ -188,8 +206,15 @@ class Pipeline:
                 self.spotify.rename_playlist(playlist["id"], self._playlist_name(naming.name, record))
             except (httpx.HTTPError, NotConnected):
                 log.warning("Could not rename playlist for %s", activity_id)
+        news = _matching_headline(naming.headline, record.get("headlines", []))
         description = build_description(
-            tracks, weather, form, naming.line, playlist and playlist["url"], record.get("runner_text", "")
+            tracks,
+            weather,
+            form,
+            naming.line,
+            playlist and playlist["url"],
+            record.get("runner_text", ""),
+            news,
         )
         self.strava.update_activity(activity_id, naming.name, description)
         record["names"] = rejected + [naming.name]

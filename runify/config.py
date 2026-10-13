@@ -53,6 +53,10 @@ class Settings:
     track_grace_seconds: int = field(
         default_factory=lambda: int(_env("TRACK_GRACE_SECONDS", "180"))
     )
+    # Headlines for the topical nod in the name. Any RSS feed works.
+    news_feed_url: str = field(
+        default_factory=lambda: _env("NEWS_FEED_URL", "https://feeds.bbci.co.uk/news/rss.xml")
+    )
     playlist_public: bool = field(
         default_factory=lambda: _env("PLAYLIST_PUBLIC", "true").lower() == "true"
     )
