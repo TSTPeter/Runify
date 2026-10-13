@@ -9,8 +9,11 @@ on), this app:
    Open-Meteo), falling back to Open-Meteo's best model;
 4. counts how often you have run lately (runs in 7 and 30 days, streak, days
    since the last one);
-5. asks Claude for a wry, lyric-punning name and a one-line reflection;
-6. writes the name and description back to Strava.
+5. reads the day's BBC News headlines;
+6. asks Claude for a wry name built from the run itself, the weather and,
+   when one suits, a light nod to the news (never grim stories), plus a
+   one-line reflection;
+7. writes the name and description back to Strava.
 
 A description looks like this:
 
@@ -18,6 +21,8 @@ A description looks like this:
 🎧 9 tracks · 🌦 11°C, light drizzle, SW 12 mph · 🔥 4th run in 7 days
 
 The wind had opinions; so did the bassline.
+
+📰 Village fete crowns giant marrow champion (https://www.bbc.co.uk/news/...)
 
 Soundtrack (playlist: https://open.spotify.com/playlist/...)
 1. Artist - Song
@@ -63,6 +68,7 @@ with CPU always allocated (see the setup guide).
 | `runify/pipeline.py` | The steps above, and the description layout |
 | `runify/running.py` | Default-name rules, matching songs to the run, recent form |
 | `runify/weather.py` | Open-Meteo lookup and plain-English conditions |
+| `runify/news.py` | The day's headlines from an RSS feed (`NEWS_FEED_URL`) |
 | `runify/namer.py` | The Claude prompt (edit `SYSTEM` to change the voice) |
 | `runify/strava.py`, `spotify.py` | API clients and OAuth |
 | `runify/store.py` | Firestore, or in-memory for tests |

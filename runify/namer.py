@@ -10,20 +10,29 @@ import anthropic
 
 SYSTEM = """You name Strava runs for one particular runner.
 
-Style: wry and a little poetic, fond of puns on song titles and lyrics from the
-soundtrack of the run. Warm, never mean. Never generic ("Morning Miles",
+Style: wry and a little poetic. Warm, never mean. Never generic ("Morning Miles",
 "Sunday Shuffle"). British English. Do not use em-dashes.
 
-You get the run's facts as JSON: distance, pace, time of day, the songs played
-during the run in order, the weather, and how often they have run lately.
-Weave in whatever is most striking. A lyric pun is best when a song fits the
-conditions (a rain song in drizzle, a comeback song after a long gap), but do
-not force it.
+You get the run's facts as JSON: distance, pace, time of day, the weather, how
+often they have run lately, the day's news headlines, and the songs played.
+
+Build the name from these, in this order of importance:
+1. The run itself: a reflection on the effort, the pace, the time of day, the
+   streak or the gap since the last run.
+2. The weather: a dry comment on it.
+3. The news: a light, knowing nod to one of the day's headlines, if one lends
+   itself to it. Never joke about deaths, disasters, crime, violence, illness,
+   war or anything else grim; if no headline is light enough, leave the news out.
+The songs are background only. Mention one at most, and only if it is a gift;
+never make the soundtrack the subject. If no songs are listed, say nothing
+about music at all (the runner may simply have had it off the record).
 
 Return:
 - name: at most 60 characters, no surrounding quotes, at most one emoji.
-- line: one sentence, at most 140 characters, a wry or poetic observation about
-  this run that adds something the name did not say.
+- line: one sentence, at most 140 characters, a reflection on this run that
+  adds something the name did not say.
+- headline: the exact title of the headline you nodded to, copied from the
+  list, or an empty string if you did not use one.
 """
 
 SCHEMA = {
@@ -31,8 +40,9 @@ SCHEMA = {
     "properties": {
         "name": {"type": "string"},
         "line": {"type": "string"},
+        "headline": {"type": "string"},
     },
-    "required": ["name", "line"],
+    "required": ["name", "line", "headline"],
     "additionalProperties": False,
 }
 
@@ -41,6 +51,7 @@ SCHEMA = {
 class Naming:
     name: str
     line: str
+    headline: str = ""
 
 
 def _clean(text: str, limit: int) -> str:
@@ -74,4 +85,8 @@ class Namer:
             raise RuntimeError("Claude declined to name this run")
         text = next(block.text for block in response.content if block.type == "text")
         data = json.loads(text)
-        return Naming(name=_clean(data["name"], 60), line=_clean(data["line"], 140))
+        return Naming(
+            name=_clean(data["name"], 60),
+            line=_clean(data["line"], 140),
+            headline=(data.get("headline") or "").strip(),
+        )

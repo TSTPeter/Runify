@@ -54,3 +54,10 @@ OPEN_METEO = {
         "relative_humidity_2m": [80, 88, 75],
     }
 }
+
+NEWS_RSS = """<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"><channel><title>Test feed</title>
+<item><title>Village fete crowns giant marrow champion</title><link>https://example.test/news/marrow</link></item>
+<item><title>Council debates new cycle lanes</title><link>https://example.test/news/lanes</link></item>
+<item><title>Third synthetic headline</title><link>https://example.test/news/third</link></item>
+</channel></rss>"""
